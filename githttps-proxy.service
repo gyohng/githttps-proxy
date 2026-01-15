@@ -1,6 +1,6 @@
 [Unit]
 Description=Git HTTPS to SSH Proxy
-Documentation=https://github.com/your-repo/githttps-proxy
+Documentation=https://github.com/gyohng/githttps-proxy
 After=network-online.target
 Wants=network-online.target
 
