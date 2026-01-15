@@ -207,8 +207,14 @@ func (c *SSHClient) runGitRefsLegacy(ctx context.Context, cmd string, repoPath s
 	}
 	defer session.Close()
 
-	sessionStdin, _ := session.StdinPipe()
-	sessionStdout, _ := session.StdoutPipe()
+	sessionStdin, err := session.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("stdin pipe: %w", err)
+	}
+	sessionStdout, err := session.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("stdout pipe: %w", err)
+	}
 
 	// capture stderr for error messages
 	var stderrBuf strings.Builder
@@ -219,22 +225,57 @@ func (c *SSHClient) runGitRefsLegacy(ctx context.Context, cmd string, repoPath s
 		return fmt.Errorf("start: %w", err)
 	}
 
-	// close stdin immediately to get refs
+	// Read refs output first (pkt-lines until flush packet 0000).
+	// We must read before closing stdin because some servers (like Bitbucket)
+	// check stdin state immediately and error if it's already closed.
+	if err := copyRefsUntilFlush(stdout, sessionStdout); err != nil {
+		sessionStdin.Close()
+		return fmt.Errorf("read refs: %w", err)
+	}
+
+	// Now close stdin to signal we're done - this causes git-upload-pack to exit
 	sessionStdin.Close()
 
-	_, err = io.Copy(stdout, sessionStdout)
-	if err != nil {
-		return fmt.Errorf("copy: %w", err)
-	}
+	// Wait for exit - ignore exit status since some servers exit non-zero
+	// after we close stdin mid-session, which is expected
+	session.Wait()
 
-	if err := session.Wait(); err != nil {
-		stderr := strings.TrimSpace(stderrBuf.String())
-		if stderr != "" {
-			return fmt.Errorf("%w: %s", err, stderr)
-		}
-		return err
-	}
 	return nil
+}
+
+// copyRefsUntilFlush reads pkt-lines from r and writes them to w until a flush packet (0000)
+func copyRefsUntilFlush(w io.Writer, r io.Reader) error {
+	lenBuf := make([]byte, 4)
+	for {
+		// read pkt-line length (4 hex chars)
+		if _, err := io.ReadFull(r, lenBuf); err != nil {
+			return fmt.Errorf("read pkt-line length: %w", err)
+		}
+
+		// write length to output
+		if _, err := w.Write(lenBuf); err != nil {
+			return fmt.Errorf("write pkt-line length: %w", err)
+		}
+
+		// parse length
+		var length int
+		if _, err := fmt.Sscanf(string(lenBuf), "%04x", &length); err != nil {
+			return fmt.Errorf("parse pkt-line length %q: %w", lenBuf, err)
+		}
+
+		// 0000 is flush packet - end of refs
+		if length == 0 {
+			return nil
+		}
+
+		// read and copy payload (length includes the 4 length bytes)
+		payloadLen := length - 4
+		if payloadLen > 0 {
+			if _, err := io.CopyN(w, r, int64(payloadLen)); err != nil {
+				return fmt.Errorf("copy pkt-line payload: %w", err)
+			}
+		}
+	}
 }
 
 // shellEscape escapes a string for safe use inside single quotes in shell commands.
