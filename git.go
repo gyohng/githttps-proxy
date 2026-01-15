@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -185,6 +187,19 @@ func (h *GitHandler) handleGitCommand(w http.ResponseWriter, r *http.Request, ta
 	}
 	defer client.Close()
 
+	// Handle gzip-compressed request body (git clients may send Content-Encoding: gzip)
+	var body io.Reader = r.Body
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		gzr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			h.log.Error("gzip reader", "error", err)
+			http.Error(w, "invalid gzip body", http.StatusBadRequest)
+			return
+		}
+		defer gzr.Close()
+		body = gzr
+	}
+
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-cache")
 
@@ -194,7 +209,7 @@ func (h *GitHandler) handleGitCommand(w http.ResponseWriter, r *http.Request, ta
 	}
 
 	// bidirectional stream
-	if err := client.RunGitCommand(r.Context(), cmd, target.RepoPath, r.Body, w); err != nil {
+	if err := client.RunGitCommand(r.Context(), cmd, target.RepoPath, body, w); err != nil {
 		h.log.Error("git command", "cmd", cmd, "error", err)
 		// can't send error to client if we've already started streaming
 		return
