@@ -20,15 +20,59 @@ func NewGitHandler(cfg *Config, log *slog.Logger) *GitHandler {
 	return &GitHandler{cfg: cfg, log: log}
 }
 
+// getClientIP extracts the client IP from the request
+func getClientIP(r *http.Request) string {
+	// check X-Forwarded-For header (if behind reverse proxy)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// take the first IP in the chain
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+	// check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	// fall back to RemoteAddr
+	host, _, err := strings.Cut(r.RemoteAddr, ":")
+	if err {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 // ServeHTTP handles all git requests
 func (h *GitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	clientIP := getClientIP(r)
+
 	// extract auth
 	username, password, ok := r.BasicAuth()
-	if !ok || !h.cfg.Authenticate(username, password) {
+	if !ok {
+		h.log.Warn("auth failed: no credentials",
+			"ip", clientIP,
+			"path", r.URL.Path,
+		)
 		w.Header().Set("WWW-Authenticate", `Basic realm="git"`)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+
+	if !h.cfg.Authenticate(username, password) {
+		h.log.Warn("auth failed: invalid credentials",
+			"user", username,
+			"ip", clientIP,
+			"path", r.URL.Path,
+		)
+		w.Header().Set("WWW-Authenticate", `Basic realm="git"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	h.log.Info("auth success",
+		"user", username,
+		"ip", clientIP,
+	)
 
 	// get signer for user
 	signer, ok := h.cfg.GetSigner(username)
@@ -47,6 +91,7 @@ func (h *GitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.log.Info("git request",
 		"user", username,
+		"ip", clientIP,
 		"target", target.String(),
 		"operation", operation,
 		"method", r.Method,

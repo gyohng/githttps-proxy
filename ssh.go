@@ -86,6 +86,10 @@ func (c *SSHClient) RunGitCommand(ctx context.Context, cmd string, repoPath stri
 		return fmt.Errorf("stdout pipe: %w", err)
 	}
 
+	// capture stderr for error messages
+	var stderrBuf strings.Builder
+	session.Stderr = &stderrBuf
+
 	// start the command with properly escaped repo path
 	fullCmd := fmt.Sprintf("%s '%s'", cmd, shellEscape(repoPath))
 	if err := session.Start(fullCmd); err != nil {
@@ -130,6 +134,10 @@ func (c *SSHClient) RunGitCommand(ctx context.Context, cmd string, repoPath stri
 	case err := <-done:
 		wg.Wait()
 		if err != nil {
+			stderr := strings.TrimSpace(stderrBuf.String())
+			if stderr != "" {
+				return fmt.Errorf("command failed: %w: %s", err, stderr)
+			}
 			return fmt.Errorf("command failed: %w", err)
 		}
 	}
@@ -143,34 +151,12 @@ func (c *SSHClient) RunGitCommand(ctx context.Context, cmd string, repoPath stri
 	}
 }
 
-// RunGitAdvertiseRefs runs git command with --advertise-refs for info/refs endpoint
+// RunGitAdvertiseRefs runs git command for info/refs endpoint
+// Uses the legacy approach (run command, close stdin) which works with all git servers
 func (c *SSHClient) RunGitAdvertiseRefs(ctx context.Context, cmd string, repoPath string, stdout io.Writer) error {
-	session, err := c.client.NewSession()
-	if err != nil {
-		return fmt.Errorf("new session: %w", err)
-	}
-	defer session.Close()
-
-	sessionStdout, err := session.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("stdout pipe: %w", err)
-	}
-
-	// some git servers support --advertise-refs, others need stateless-rpc
-	// try the modern approach first
-	fullCmd := fmt.Sprintf("%s --advertise-refs '%s'", cmd, shellEscape(repoPath))
-	if err := session.Start(fullCmd); err != nil {
-		// fallback: just run the command and read initial refs
-		session.Close()
-		return c.runGitRefsLegacy(ctx, cmd, repoPath, stdout)
-	}
-
-	_, err = io.Copy(stdout, sessionStdout)
-	if err != nil {
-		return fmt.Errorf("copy stdout: %w", err)
-	}
-
-	return session.Wait()
+	// Use legacy approach which is universally supported (GitHub, GitLab, Gitea, etc.)
+	// The --advertise-refs flag is only supported by some git servers
+	return c.runGitRefsLegacy(ctx, cmd, repoPath, stdout)
 }
 
 // runGitRefsLegacy handles servers without --advertise-refs support
@@ -183,6 +169,10 @@ func (c *SSHClient) runGitRefsLegacy(ctx context.Context, cmd string, repoPath s
 
 	sessionStdin, _ := session.StdinPipe()
 	sessionStdout, _ := session.StdoutPipe()
+
+	// capture stderr for error messages
+	var stderrBuf strings.Builder
+	session.Stderr = &stderrBuf
 
 	fullCmd := fmt.Sprintf("%s '%s'", cmd, shellEscape(repoPath))
 	if err := session.Start(fullCmd); err != nil {
@@ -197,7 +187,14 @@ func (c *SSHClient) runGitRefsLegacy(ctx context.Context, cmd string, repoPath s
 		return fmt.Errorf("copy: %w", err)
 	}
 
-	return session.Wait()
+	if err := session.Wait(); err != nil {
+		stderr := strings.TrimSpace(stderrBuf.String())
+		if stderr != "" {
+			return fmt.Errorf("%w: %s", err, stderr)
+		}
+		return err
+	}
+	return nil
 }
 
 // shellEscape escapes a string for safe use inside single quotes in shell commands.

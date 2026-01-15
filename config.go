@@ -38,6 +38,7 @@ type Config struct {
 	Listen  string                `yaml:"listen"`
 	TLS     TLSConfig             `yaml:"tls"`
 	KeysDir string                `yaml:"keys_dir"` // directory to load keys from if not inline
+	LogFile string                `yaml:"log_file"` // log file path (empty = stdout)
 	Users   map[string]UserConfig `yaml:"users"`
 
 	// parsed signers cached per user

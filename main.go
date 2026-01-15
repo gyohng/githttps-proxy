@@ -35,6 +35,7 @@ const version = "0.1.0"
 func main() {
 	var (
 		configPath = flag.String("config", "config.yaml", "path to config file")
+		logFile    = flag.String("log", "", "log file path (overrides config, empty = stdout)")
 		showHelp   = flag.Bool("help", false, "show help")
 		showVer    = flag.Bool("version", false, "show version")
 	)
@@ -85,18 +86,33 @@ func main() {
 		return
 	}
 
-	// setup logger
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	// load config first (need log_file setting)
+	cfg, err := LoadConfig(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// setup logger - CLI flag overrides config
+	logOutput := os.Stdout
+	logPath := cfg.LogFile
+	if *logFile != "" {
+		logPath = *logFile
+	}
+	if logPath != "" {
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: failed to open log file %s: %v\n", logPath, err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		logOutput = f
+	}
+
+	log := slog.New(slog.NewTextHandler(logOutput, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(log)
-
-	// load config
-	cfg, err := LoadConfig(*configPath)
-	if err != nil {
-		log.Error("failed to load config", "error", err)
-		os.Exit(1)
-	}
 
 	log.Info("starting githttps-proxy", "version", version, "users", len(cfg.Users))
 
@@ -122,6 +138,7 @@ Usage:
 
 Flags:
   -config string    Path to config file (default "config.yaml")
+  -log string       Log file path (overrides config, empty = stdout)
   -help             Show this help
   -version          Show version
 

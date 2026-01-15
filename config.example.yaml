@@ -12,6 +12,11 @@
 # For plain HTTP (behind reverse proxy): use any port
 listen: ":443"
 
+# Log file path (optional)
+# If not set or empty, logs go to stdout
+# Can also be overridden with -log command line flag
+# log_file: /var/log/githttps-proxy.log
+
 # TLS configuration
 tls:
   # Enable HTTPS
