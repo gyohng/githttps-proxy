@@ -67,7 +67,9 @@ func (c *SSHClient) Close() error {
 }
 
 // RunGitCommand executes a git command (git-upload-pack or git-receive-pack)
-// and streams stdin/stdout bidirectionally with the provided readers/writers
+// and streams stdin/stdout bidirectionally with the provided readers/writers.
+// For HTTP Smart protocol, it first discards the refs advertisement from the server
+// since the client already got that from /info/refs.
 func (c *SSHClient) RunGitCommand(ctx context.Context, cmd string, repoPath string, stdin io.Reader, stdout io.Writer) error {
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -94,6 +96,13 @@ func (c *SSHClient) RunGitCommand(ctx context.Context, cmd string, repoPath stri
 	fullCmd := fmt.Sprintf("%s '%s'", cmd, shellEscape(repoPath))
 	if err := session.Start(fullCmd); err != nil {
 		return fmt.Errorf("start %q: %w", fullCmd, err)
+	}
+
+	// SSH git protocol always sends refs advertisement first.
+	// For HTTP Smart POST requests, we need to discard this since
+	// the client already got refs from GET /info/refs.
+	if err := discardRefsAdvertisement(sessionStdout); err != nil {
+		return fmt.Errorf("discard refs: %w", err)
 	}
 
 	// bidirectional copy with context cancellation
@@ -148,6 +157,37 @@ func (c *SSHClient) RunGitCommand(ctx context.Context, cmd string, repoPath stri
 		return err
 	default:
 		return nil
+	}
+}
+
+// discardRefsAdvertisement reads and discards pkt-lines until a flush packet (0000).
+// This is used to skip the refs advertisement that SSH git always sends.
+func discardRefsAdvertisement(r io.Reader) error {
+	lenBuf := make([]byte, 4)
+	for {
+		// read pkt-line length (4 hex chars)
+		if _, err := io.ReadFull(r, lenBuf); err != nil {
+			return fmt.Errorf("read pkt-line length: %w", err)
+		}
+
+		// parse length
+		var length int
+		if _, err := fmt.Sscanf(string(lenBuf), "%04x", &length); err != nil {
+			return fmt.Errorf("parse pkt-line length %q: %w", lenBuf, err)
+		}
+
+		// 0000 is flush packet - end of refs
+		if length == 0 {
+			return nil
+		}
+
+		// read and discard payload (length includes the 4 length bytes)
+		payloadLen := length - 4
+		if payloadLen > 0 {
+			if _, err := io.CopyN(io.Discard, r, int64(payloadLen)); err != nil {
+				return fmt.Errorf("discard pkt-line payload: %w", err)
+			}
+		}
 	}
 }
 
