@@ -434,14 +434,23 @@ func runServer(cfg *Config, handler http.Handler, log *slog.Logger) error {
 				MinVersion:     tls.VersionTLS12,
 			}
 
-			// start ACME HTTP challenge server
-			go func() {
-				acmeAddr := ":80"
-				log.Info("ACME HTTP-01 challenge server listening", "addr", acmeAddr)
-				if err := http.ListenAndServe(acmeAddr, certManager.HTTPHandler(nil)); err != nil {
-					log.Error("ACME server error", "error", err)
-				}
-			}()
+			// start ACME HTTP challenge server (unless disabled)
+			acmePort := 80 // default
+			if cfg.TLS.ACMEHTTPPort != nil {
+				acmePort = *cfg.TLS.ACMEHTTPPort
+			}
+
+			if acmePort > 0 {
+				go func() {
+					acmeAddr := ":" + strconv.Itoa(acmePort)
+					log.Info("ACME HTTP-01 challenge server listening", "addr", acmeAddr)
+					if err := http.ListenAndServe(acmeAddr, certManager.HTTPHandler(nil)); err != nil {
+						log.Error("ACME server error", "error", err)
+					}
+				}()
+			} else {
+				log.Info("ACME HTTP-01 challenge server disabled (acme_http_port: 0)")
+			}
 		}
 
 		tlsAddr := listenAddr

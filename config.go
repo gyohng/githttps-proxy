@@ -18,6 +18,10 @@ type TLSConfig struct {
 	ACMEEmail  string   `yaml:"acme_email"`
 	CertDir    string   `yaml:"cert_dir"`
 	Port       int      `yaml:"port"`
+	// ACMEHTTPPort is the port for the HTTP-01 challenge server (default: 80)
+	// Set to 0 to disable the built-in challenge server (useful when nginx handles it)
+	// Set to another port if nginx proxies /.well-known/acme-challenge/ to this server
+	ACMEHTTPPort *int `yaml:"acme_http_port"`
 	// Use existing certificate files (e.g., from certbot)
 	// If set, takes precedence over self_signed and autocert
 	CertFile string `yaml:"cert_file"` // e.g., /etc/letsencrypt/live/domain/fullchain.pem

@@ -36,6 +36,15 @@ tls:
   
   # HTTPS port (default: 443)
   port: 443
+  
+  # ACME HTTP-01 challenge port (default: 80)
+  # Set to 0 to disable the built-in challenge server
+  # Useful when nginx is already on port 80 and handles ACME challenges,
+  # and you use cert_file/key_file to point to the nginx-managed certificates
+  # acme_http_port: 0
+  #
+  # Or set to another port if nginx proxies /.well-known/acme-challenge/ here:
+  # acme_http_port: 8080
 
 # Directory to load SSH keys from (optional)
 # If a user doesn't have an inline private_key, the proxy will look for:

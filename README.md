@@ -76,9 +76,14 @@ tls:
   enabled: true
   cert_file: /etc/letsencrypt/live/git.example.com/fullchain.pem
   key_file: /etc/letsencrypt/live/git.example.com/privkey.pem
+  acme_http_port: 0  # disable built-in ACME server (nginx handles it)
 ```
 
 The certificate will hot-reload if it changes.
+
+**ACME HTTP port**: By default, the Let's Encrypt mode starts an HTTP server on port 80 for the HTTP-01 challenge. If nginx is already using port 80:
+- Set `acme_http_port: 0` to disable the built-in server (use with `cert_file`/`key_file`)
+- Or set `acme_http_port: 8080` and configure nginx to proxy `/.well-known/acme-challenge/` to it
 
 ### Password hashing
 
