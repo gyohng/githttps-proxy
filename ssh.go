@@ -238,7 +238,7 @@ func (c *SSHClient) runGitRefsLegacy(ctx context.Context, cmd string, repoPath s
 }
 
 // shellEscape escapes a string for safe use inside single quotes in shell commands.
-// It replaces single quotes with the sequence: '\” (end quote, escaped quote, start quote)
+// It replaces single quotes with the sequence: end quote, escaped quote, start quote
 func shellEscape(s string) string {
 	return strings.ReplaceAll(s, "'", "'\\''")
 }

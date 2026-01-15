@@ -34,9 +34,9 @@ func getClientIP(r *http.Request) string {
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return xri
 	}
-	// fall back to RemoteAddr
-	host, _, err := strings.Cut(r.RemoteAddr, ":")
-	if err {
+	// fall back to RemoteAddr (strip port)
+	host, _, found := strings.Cut(r.RemoteAddr, ":")
+	if found {
 		return host
 	}
 	return r.RemoteAddr
