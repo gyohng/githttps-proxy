@@ -71,42 +71,34 @@ tls:
 #   githttps-proxy pubkey -user alice
 
 users:
+
   # Example user with plaintext password (simpler, less secure)
+
   alice:
     password: "password123"
     # Replace this with your actual SSH private key
     # Generate with: ssh-keygen -t ed25519 -f mykey
     private_key: |
       -----BEGIN OPENSSH PRIVATE KEY-----
-      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-      QyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/QAAAJjAJY+GwCWP
-      hgAAAAtzc2gtZWQyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/Q
-      AAAECf9fbk/5NByikEeUCRGeJQ0I44z89oudHAFDhsCYQT5m9S2ET1IXY84HUheFJAt2Bd
-      eXBxueYxI8QvU05lvVH9AAAAD2V4YW1wbGVAZXhhbXBsZQECAwQFBg==
+      ...
       -----END OPENSSH PRIVATE KEY-----
 
   # Example user with bcrypt secret (more secure)
   # Generate secret with: githttps-proxy secret mysecretpassword
   # If keys_dir is set and no private_key here, key loads from keys_dir/bob
+
   bob:
     secret: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
     private_key: |
       -----BEGIN OPENSSH PRIVATE KEY-----
-      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-      QyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/QAAAJjAJY+GwCWP
-      hgAAAAtzc2gtZWQyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/Q
-      AAAECf9fbk/5NByikEeUCRGeJQ0I44z89oudHAFDhsCYQT5m9S2ET1IXY84HUheFJAt2Bd
-      eXBxueYxI8QvU05lvVH9AAAAD2V4YW1wbGVAZXhhbXBsZQECAwQFBg==
+      ....
       -----END OPENSSH PRIVATE KEY-----
 
   # Example with inline key (overrides keys_dir lookup)
+
   charlie:
     password: "charliepass"
     private_key: |
       -----BEGIN OPENSSH PRIVATE KEY-----
-      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-      QyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/QAAAJjAJY+GwCWP
-      hgAAAAtzc2gtZWQyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/Q
-      AAAECf9fbk/5NByikEeUCRGeJQ0I44z89oudHAFDhsCYQT5m9S2ET1IXY84HUheFJAt2Bd
-      eXBxueYxI8QvU05lvVH9AAAAD2V4YW1wbGVAZXhhbXBsZQECAwQFBg==
+      ....
       -----END OPENSSH PRIVATE KEY-----
