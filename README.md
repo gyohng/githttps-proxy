@@ -109,10 +109,21 @@ githttps-proxy secret PASSWORD     # generate bcrypt hash
 ## Installation (Ubuntu/Debian)
 
 ```
-go build -o githttps-proxy .
+CGO_ENABLED=0 go build -o githttps-proxy .
 sudo ./install.sh
 sudo nano /etc/githttps-proxy/config.yaml
 sudo systemctl enable --now githttps-proxy
+```
+
+## Cross-compilation
+
+If you are, for example, on macOS, and you want to run it on Linux, you can cross-compile for the target architecture:
+
+```
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o githttps-proxy-amd64 .
+
+# For an ARM64 machine, you can build for ARM64:
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o githttps-proxy-arm64 .
 ```
 
 ## Usage
