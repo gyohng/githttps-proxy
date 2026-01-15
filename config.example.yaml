@@ -1,0 +1,98 @@
+# githttps-proxy configuration
+#
+# Usage:
+#   git clone https://alice:password123@your-proxy.example.com/git@github.com:owner/repo.git
+#
+# The URL encodes:
+#   - alice:password123 - credentials for this proxy (user maps to SSH key below)
+#   - git@github.com:owner/repo.git - the actual SSH git remote to proxy to
+
+# Listen address for the server
+# For TLS (recommended): use port 443
+# For plain HTTP (behind reverse proxy): use any port
+listen: ":443"
+
+# TLS configuration
+tls:
+  # Enable HTTPS
+  enabled: true
+  
+  # Option 1: Use existing certificate files (e.g., from certbot)
+  # If both are set, takes precedence over self_signed and autocert
+  # cert_file: /etc/letsencrypt/live/git.example.com/fullchain.pem
+  # key_file: /etc/letsencrypt/live/git.example.com/privkey.pem
+  
+  # Option 2: Use self-signed certificate (for testing)
+  self_signed: true
+  
+  # Option 3: Let's Encrypt autocert (if self_signed: false and no cert_file)
+  # Requires hosts and acme_email
+  hosts:
+    - git.example.com
+  acme_email: admin@example.com
+  
+  # Directory to store autocert/self-signed certificates
+  cert_dir: /var/lib/githttps-proxy/certs
+  
+  # HTTPS port (default: 443)
+  port: 443
+
+# Directory to load SSH keys from (optional)
+# If a user doesn't have an inline private_key, the proxy will look for:
+#   keys_dir/username
+#   keys_dir/username.pem
+#   keys_dir/username.key
+# Key type (RSA, ED25519, ECDSA) is auto-detected from PEM headers
+# keys_dir: /etc/githttps-proxy/keys
+
+# Users configuration
+# Each user maps to:
+#   - password or secret (bcrypt hash) for proxy authentication
+#   - private_key (optional if keys_dir is set) for SSH authentication
+#
+# Generate a secret hash with:
+#   githttps-proxy secret yourpassword
+#
+# Show public key for a user with:
+#   githttps-proxy pubkey -user alice
+
+users:
+  # Example user with plaintext password (simpler, less secure)
+  alice:
+    password: "password123"
+    # Replace this with your actual SSH private key
+    # Generate with: ssh-keygen -t ed25519 -f mykey
+    private_key: |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+      QyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/QAAAJjAJY+GwCWP
+      hgAAAAtzc2gtZWQyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/Q
+      AAAECf9fbk/5NByikEeUCRGeJQ0I44z89oudHAFDhsCYQT5m9S2ET1IXY84HUheFJAt2Bd
+      eXBxueYxI8QvU05lvVH9AAAAD2V4YW1wbGVAZXhhbXBsZQECAwQFBg==
+      -----END OPENSSH PRIVATE KEY-----
+
+  # Example user with bcrypt secret (more secure)
+  # Generate secret with: githttps-proxy secret mysecretpassword
+  # If keys_dir is set and no private_key here, key loads from keys_dir/bob
+  bob:
+    secret: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+    private_key: |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+      QyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/QAAAJjAJY+GwCWP
+      hgAAAAtzc2gtZWQyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/Q
+      AAAECf9fbk/5NByikEeUCRGeJQ0I44z89oudHAFDhsCYQT5m9S2ET1IXY84HUheFJAt2Bd
+      eXBxueYxI8QvU05lvVH9AAAAD2V4YW1wbGVAZXhhbXBsZQECAwQFBg==
+      -----END OPENSSH PRIVATE KEY-----
+
+  # Example with inline key (overrides keys_dir lookup)
+  charlie:
+    password: "charliepass"
+    private_key: |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+      QyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/QAAAJjAJY+GwCWP
+      hgAAAAtzc2gtZWQyNTUxOQAAACBvUthE9SF2POB1IXhSQLdgXXlwcbnmMSPEL1NOZb1R/Q
+      AAAECf9fbk/5NByikEeUCRGeJQ0I44z89oudHAFDhsCYQT5m9S2ET1IXY84HUheFJAt2Bd
+      eXBxueYxI8QvU05lvVH9AAAAD2V4YW1wbGVAZXhhbXBsZQECAwQFBg==
+      -----END OPENSSH PRIVATE KEY-----
