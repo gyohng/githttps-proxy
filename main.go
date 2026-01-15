@@ -237,6 +237,11 @@ func runKeygen(username, keyType, configPath string) {
 			os.Exit(1)
 		}
 
+		// match ownership to keys_dir when running as root
+		if err := matchOwnership(keyPath, keysDir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not set ownership: %v\n", err)
+		}
+
 		fmt.Fprintf(os.Stderr, "Private key saved to: %s\n", keyPath)
 		fmt.Fprintf(os.Stderr, "\nPublic key (add to git host):\n")
 		fmt.Print(publicKeySSH)
