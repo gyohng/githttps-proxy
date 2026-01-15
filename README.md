@@ -102,9 +102,26 @@ users:
 githttps-proxy                     # start server
 githttps-proxy -config /path/to/config.yaml
 
-githttps-proxy pubkey -user alice  # print public key (add to GitHub/GitLab)
+githttps-proxy keygen -user alice  # generate SSH key pair (ed25519)
+githttps-proxy keygen -user bob -type rsa4096  # generate RSA-4096 key
+githttps-proxy pubkey -user alice  # print public key (add to GitHub/GitLab/etc)
 githttps-proxy secret PASSWORD     # generate bcrypt hash
 ```
+
+### Key generation
+
+You can generate SSH keys for users with the `keygen` command:
+
+```
+githttps-proxy keygen -user USERNAME [-type TYPE] [-config CONFIG]
+```
+
+Supported key types:
+- `ed25519` (default) - Modern, secure, compact keys
+- `rsa4096` - RSA with 4096 bits, widely compatible
+- `ecdsa384` - ECDSA with P-384 curve
+
+If `keys_dir` is configured and the directory exists, the private key is saved there automatically. Otherwise, the key is printed to the console with instructions for adding it to your config.
 
 ## Installation (Ubuntu/Debian)
 

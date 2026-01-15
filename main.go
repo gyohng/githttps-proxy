@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -19,11 +21,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
+	"golang.org/x/crypto/ssh"
 )
 
 const version = "0.1.0"
@@ -42,6 +46,11 @@ func main() {
 
 	secretCmd := flag.NewFlagSet("secret", flag.ExitOnError)
 
+	keygenCmd := flag.NewFlagSet("keygen", flag.ExitOnError)
+	keygenUser := keygenCmd.String("user", "", "username for the key (required)")
+	keygenType := keygenCmd.String("type", "ed25519", "key type: ed25519, rsa4096, ecdsa384")
+	keygenConfig := keygenCmd.String("config", "config.yaml", "path to config file (to detect keys_dir)")
+
 	flag.Parse()
 
 	// handle subcommands
@@ -54,6 +63,10 @@ func main() {
 		case "secret":
 			secretCmd.Parse(os.Args[2:])
 			runSecret(secretCmd.Args())
+			return
+		case "keygen":
+			keygenCmd.Parse(os.Args[2:])
+			runKeygen(*keygenUser, *keygenType, *keygenConfig)
 			return
 		case "serve":
 			// continue to server
@@ -105,16 +118,24 @@ Usage:
   githttps-proxy serve [flags]        Start the proxy server (explicit)
   githttps-proxy pubkey -user NAME    Print public key for a user
   githttps-proxy secret PASSWORD      Generate bcrypt hash for password
+  githttps-proxy keygen -user NAME    Generate SSH key pair for a user
 
 Flags:
   -config string    Path to config file (default "config.yaml")
   -help             Show this help
   -version          Show version
 
+Keygen Flags:
+  -user string      Username for the key (required)
+  -type string      Key type: ed25519 (default), rsa4096, ecdsa384
+  -config string    Path to config file to detect keys_dir (default "config.yaml")
+
 Examples:
   githttps-proxy -config /etc/githttps-proxy/config.yaml
   githttps-proxy pubkey -user alice -config config.yaml
-  githttps-proxy secret mysecretpassword`)
+  githttps-proxy secret mysecretpassword
+  githttps-proxy keygen -user alice
+  githttps-proxy keygen -user bob -type rsa4096`)
 }
 
 func runPubkey(configPath, username string) {
@@ -152,6 +173,195 @@ func runSecret(args []string) {
 	}
 
 	fmt.Println(hash)
+}
+
+func runKeygen(username, keyType, configPath string) {
+	if username == "" {
+		fmt.Fprintln(os.Stderr, "error: -user is required")
+		fmt.Fprintln(os.Stderr, "usage: githttps-proxy keygen -user USERNAME [-type ed25519|rsa4096|ecdsa384]")
+		os.Exit(1)
+	}
+
+	// validate key type
+	keyType = strings.ToLower(keyType)
+	switch keyType {
+	case "ed25519", "rsa4096", "ecdsa384":
+		// valid
+	default:
+		fmt.Fprintf(os.Stderr, "error: unsupported key type %q (use ed25519, rsa4096, or ecdsa384)\n", keyType)
+		os.Exit(1)
+	}
+
+	// generate the key
+	privateKeyPEM, publicKeySSH, err := generateSSHKeyPair(keyType, username)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error generating key: %v\n", err)
+		os.Exit(1)
+	}
+
+	// try to detect keys_dir from config
+	var keysDir string
+	if data, err := os.ReadFile(configPath); err == nil {
+		// simple extraction of keys_dir from config without full parsing
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "keys_dir:") {
+				keysDir = strings.TrimSpace(strings.TrimPrefix(line, "keys_dir:"))
+				keysDir = strings.Trim(keysDir, `"'`)
+				break
+			}
+		}
+	}
+
+	// check if keys_dir exists
+	keysDirExists := false
+	if keysDir != "" {
+		if info, err := os.Stat(keysDir); err == nil && info.IsDir() {
+			keysDirExists = true
+		}
+	}
+
+	if keysDirExists {
+		// save to keys directory
+		keyPath := filepath.Join(keysDir, username)
+
+		// check if file already exists
+		if _, err := os.Stat(keyPath); err == nil {
+			fmt.Fprintf(os.Stderr, "error: key file already exists: %s\n", keyPath)
+			fmt.Fprintln(os.Stderr, "Remove the existing file first if you want to regenerate.")
+			os.Exit(1)
+		}
+
+		if err := os.WriteFile(keyPath, []byte(privateKeyPEM), 0600); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing key file: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(os.Stderr, "Private key saved to: %s\n", keyPath)
+		fmt.Fprintf(os.Stderr, "\nPublic key (add to git host):\n")
+		fmt.Print(publicKeySSH)
+	} else {
+		// print to console with config instructions
+		fmt.Fprintf(os.Stderr, "Generated %s key for user %q\n\n", keyType, username)
+
+		fmt.Fprintln(os.Stderr, "=== PRIVATE KEY ===")
+		fmt.Fprintln(os.Stderr, "Add this to your config.yaml under the user's private_key field:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintf(os.Stderr, "users:\n")
+		fmt.Fprintf(os.Stderr, "  %s:\n", username)
+		fmt.Fprintf(os.Stderr, "    password: \"YOUR_PASSWORD_HERE\"\n")
+		fmt.Fprintf(os.Stderr, "    private_key: |\n")
+
+		// indent the private key for YAML
+		for _, line := range strings.Split(strings.TrimSpace(privateKeyPEM), "\n") {
+			fmt.Fprintf(os.Stderr, "      %s\n", line)
+		}
+
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "=== PUBLIC KEY ===")
+		fmt.Fprintln(os.Stderr, "Add this to your git host (GitHub, GitLab, etc.):")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Print(publicKeySSH)
+
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "TIP: To save keys to a directory, set keys_dir in your config and create the directory.")
+	}
+}
+
+// generateSSHKeyPair generates an SSH key pair of the specified type
+// Returns the private key in PEM format and public key in authorized_keys format
+func generateSSHKeyPair(keyType, comment string) (privateKeyPEM, publicKeySSH string, err error) {
+	switch keyType {
+	case "ed25519":
+		return generateED25519Key(comment)
+	case "rsa4096":
+		return generateRSAKey(4096, comment)
+	case "ecdsa384":
+		return generateECDSAKey(elliptic.P384(), comment)
+	default:
+		return "", "", fmt.Errorf("unsupported key type: %s", keyType)
+	}
+}
+
+func generateED25519Key(comment string) (string, string, error) {
+	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", fmt.Errorf("generate ed25519 key: %w", err)
+	}
+
+	// convert to SSH format
+	sshPubKey, err := ssh.NewPublicKey(pubKey)
+	if err != nil {
+		return "", "", fmt.Errorf("create ssh public key: %w", err)
+	}
+
+	// marshal private key to OpenSSH format
+	pemBlock, err := ssh.MarshalPrivateKey(privKey, comment)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal private key: %w", err)
+	}
+
+	privateKeyPEM := string(pem.EncodeToMemory(pemBlock))
+	publicKeySSH := string(ssh.MarshalAuthorizedKey(sshPubKey))
+
+	// add comment to public key
+	publicKeySSH = strings.TrimSpace(publicKeySSH) + " " + comment + "\n"
+
+	return privateKeyPEM, publicKeySSH, nil
+}
+
+func generateRSAKey(bits int, comment string) (string, string, error) {
+	privKey, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		return "", "", fmt.Errorf("generate rsa key: %w", err)
+	}
+
+	// convert to SSH format
+	sshPubKey, err := ssh.NewPublicKey(&privKey.PublicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("create ssh public key: %w", err)
+	}
+
+	// marshal private key to OpenSSH format
+	pemBlock, err := ssh.MarshalPrivateKey(privKey, comment)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal private key: %w", err)
+	}
+
+	privateKeyPEM := string(pem.EncodeToMemory(pemBlock))
+	publicKeySSH := string(ssh.MarshalAuthorizedKey(sshPubKey))
+
+	// add comment to public key
+	publicKeySSH = strings.TrimSpace(publicKeySSH) + " " + comment + "\n"
+
+	return privateKeyPEM, publicKeySSH, nil
+}
+
+func generateECDSAKey(curve elliptic.Curve, comment string) (string, string, error) {
+	privKey, err := ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		return "", "", fmt.Errorf("generate ecdsa key: %w", err)
+	}
+
+	// convert to SSH format
+	sshPubKey, err := ssh.NewPublicKey(&privKey.PublicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("create ssh public key: %w", err)
+	}
+
+	// marshal private key to OpenSSH format
+	pemBlock, err := ssh.MarshalPrivateKey(privKey, comment)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal private key: %w", err)
+	}
+
+	privateKeyPEM := string(pem.EncodeToMemory(pemBlock))
+	publicKeySSH := string(ssh.MarshalAuthorizedKey(sshPubKey))
+
+	// add comment to public key
+	publicKeySSH = strings.TrimSpace(publicKeySSH) + " " + comment + "\n"
+
+	return privateKeyPEM, publicKeySSH, nil
 }
 
 func runServer(cfg *Config, handler http.Handler, log *slog.Logger) error {
