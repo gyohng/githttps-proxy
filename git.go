@@ -101,6 +101,8 @@ func (h *GitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// route to appropriate handler
 	switch {
+	case strings.HasPrefix(operation, "/info/lfs"):
+		h.handleLFS(w, r, target, signer, operation)
 	case strings.HasSuffix(operation, "/info/refs"):
 		h.handleInfoRefs(w, r, target, signer)
 	case strings.HasSuffix(operation, "/git-upload-pack"):

@@ -30,8 +30,9 @@ func ParseSSHTarget(path string) (*SSHTarget, string, error) {
 	}
 
 	// find the git operation suffix
+	// order matters: check longer prefixes first to avoid partial matches
 	var operation string
-	for _, op := range []string{"/info/refs", "/git-upload-pack", "/git-receive-pack", "/HEAD"} {
+	for _, op := range []string{"/info/lfs", "/info/refs", "/git-upload-pack", "/git-receive-pack", "/HEAD"} {
 		if idx := strings.Index(decoded, op); idx > 0 {
 			operation = decoded[idx:]
 			decoded = decoded[:idx]
