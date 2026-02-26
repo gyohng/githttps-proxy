@@ -1,0 +1,33 @@
+# Coolify-compatible Docker Compose for githttps-proxy
+#
+# Coolify terminates HTTPS and proxies to this container on port 8080.
+# Persistent state (config + SSH keys) lives in bind-mounted directories
+# created automatically on first run — nothing to pre-create.
+#
+# In Coolify, set Docker Compose Location to: docker/docker-compose-coolify.yml
+#
+# After first deploy, open the Coolify terminal and run:
+#   githttps-proxy secret YOUR_PASSWORD
+#   githttps-proxy keygen -user USERNAME
+# Then edit /data/config/config.yaml to add the user and restart.
+
+services:
+  app:
+    image: ${SERVICE_IMAGE_APP:-githttps-proxy:latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      - SERVICE_FQDN_APP=${SERVICE_FQDN_APP:-}
+    volumes:
+      - ./data/config:/data/config
+      - ./data/keys:/data/keys
+    healthcheck:
+      test: ["CMD", "curl", "-so", "/dev/null", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

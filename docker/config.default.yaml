@@ -1,0 +1,29 @@
+# githttps-proxy — default Docker / Coolify configuration
+#
+# Coolify terminates TLS; this listens on plain HTTP.
+#
+# Quick start (run inside the Coolify terminal):
+#
+#   1. Hash a password:
+#        githttps-proxy secret YOUR_PASSWORD
+#
+#   2. Generate an SSH keypair (saved to /data/keys automatically):
+#        githttps-proxy keygen -user USERNAME
+#
+#   3. Paste the bcrypt hash below, restart the container.
+#
+#   4. Add the printed public key to your git host (GitHub → Deploy Keys, etc.)
+#
+# Then clone via:
+#   git clone https://USERNAME:PASSWORD@YOUR_DOMAIN/git@github.com:owner/repo.git
+
+listen: ":8080"
+
+keys_dir: /data/keys
+
+# Uncomment to also log to a file (stdout is always captured by Docker):
+# log_file: /data/logs/proxy.log
+
+users: {}
+  # alice:
+  #   secret: "$2a$10$..."   # githttps-proxy secret YOUR_PASSWORD

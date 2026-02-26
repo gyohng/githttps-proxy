@@ -1,0 +1,15 @@
+.git/
+.gitignore
+.dockerignore
+docker-compose-coolify.yml
+githttps-proxy
+githttps-proxy-amd64
+*.log
+.DS_Store
+LICENSE
+README.md
+certs/
+config/
+keys/
+logs/
+data/
