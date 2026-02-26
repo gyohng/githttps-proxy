@@ -269,15 +269,19 @@ func (h *GitHandler) rewriteLFSBatchResponse(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// build the base proxy URL from the incoming request
-	scheme := "https"
-	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	} else if r.TLS == nil {
-		scheme = "http"
+	// build the base proxy URL for rewritten LFS object URLs
+	var proxyBase string
+	if h.cfg.ExternalURL != "" {
+		proxyBase = fmt.Sprintf("%s/%s/info/lfs/objects", strings.TrimRight(h.cfg.ExternalURL, "/"), target.String())
+	} else {
+		scheme := "https"
+		if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+			scheme = proto
+		} else if r.TLS == nil {
+			scheme = "http"
+		}
+		proxyBase = fmt.Sprintf("%s://%s/%s/info/lfs/objects", scheme, r.Host, target.String())
 	}
-	// use the Host header from the original request
-	proxyBase := fmt.Sprintf("%s://%s/%s/info/lfs/objects", scheme, r.Host, target.String())
 
 	// rewrite each object's action URLs
 	for i := range batchResp.Objects {

@@ -12,6 +12,14 @@
 # For plain HTTP (behind reverse proxy): use any port
 listen: ":443"
 
+# External URL override (optional)
+# Used to construct LFS download/upload URLs that point back through this proxy.
+# Set this when the proxy's publicly reachable URL differs from what the proxy
+# can detect from incoming requests — e.g., running behind a reverse proxy,
+# on a non-standard port, or when the Host header doesn't include the port.
+# Must include scheme and port if non-standard.
+# external_url: "https://git.example.com:8443"
+
 # Log file path (optional)
 # If not set or empty, logs go to stdout
 # Can also be overridden with -log command line flag

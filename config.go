@@ -35,11 +35,12 @@ type UserConfig struct {
 }
 
 type Config struct {
-	Listen  string                `yaml:"listen"`
-	TLS     TLSConfig             `yaml:"tls"`
-	KeysDir string                `yaml:"keys_dir"` // directory to load keys from if not inline
-	LogFile string                `yaml:"log_file"` // log file path (empty = stdout)
-	Users   map[string]UserConfig `yaml:"users"`
+	Listen      string                `yaml:"listen"`
+	ExternalURL string                `yaml:"external_url"` // override base URL for LFS rewrites (e.g., "https://git.example.com:8443")
+	TLS         TLSConfig             `yaml:"tls"`
+	KeysDir     string                `yaml:"keys_dir"`  // directory to load keys from if not inline
+	LogFile     string                `yaml:"log_file"`  // log file path (empty = stdout)
+	Users       map[string]UserConfig `yaml:"users"`
 
 	// parsed signers cached per user
 	signers map[string]ssh.Signer
